@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>Calculadora USDT • BCV</title>
+<style>
+:root{--bg:#f5f7fb;--ink:#0b1220;--muted:#667085;--line:#e1e5eb;--card:#fff;--soft:#eef1f5;--gray:#eef0f3}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif}
+.app{max-width:520px;margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
+.top{display:flex;align-items:center;margin-bottom:20px}.brand{display:flex;align-items:center;gap:11px}.logo{width:44px;height:44px;border-radius:14px;background:#0b1220;color:white;display:grid;place-items:center;font-weight:800;font-size:12px}
+h1{font-size:21px;line-height:1.1;margin:0}.tag{font-size:12px;color:var(--muted);margin-top:4px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 8px 28px rgba(16,24,40,.05)}
+.section-title{font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#475467;margin-bottom:3px}.section-sub{font-size:12px;color:var(--muted);margin-bottom:15px}
+label{display:block;font-size:13px;font-weight:700;color:#344054;margin:14px 0 7px}input{width:100%;height:51px;border:1px solid #d8dde7;background:#fbfcfe;border-radius:14px;padding:0 14px;font-size:18px;color:var(--ink);outline:none}
+.bcv-row{display:flex;gap:8px}.bcv-field{flex:1}.bcv-update{height:51px;width:51px;flex:0 0 51px;border:0;border-radius:14px;background:var(--soft);color:#0b1220;font-size:21px;font-weight:800}
+.status{font-size:11px;color:#667085;margin-top:7px;min-height:15px}.results{padding:6px 18px 10px}
+.result{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 14px;background:var(--gray);border:1px solid #e0e3e7;border-radius:15px;margin:9px 0}
+.name{font-size:13px;color:#0b1220;line-height:1.25;font-weight:800;text-transform:uppercase}.value{font-size:18px;font-weight:900;color:#0b1220;white-space:nowrap}
+.actions{display:flex;gap:10px;margin-top:15px}button{flex:1;height:48px;border:0;border-radius:14px;font-size:15px;font-weight:750}.primary{background:#0b1220;color:white}.secondary{background:var(--soft);color:#344054}
+.footer{text-align:center;color:#98a2b3;font-size:11px;margin-top:17px}
+</style>
+</head>
+<body>
+<main class="app">
+<header class="top"><div class="brand"><div class="logo">USDT</div><div><h1>Calculadora USDT • BCV</h1><div class="tag">Conversión y referencia de intervención</div></div></div></header>
+
+<section class="card">
+<div class="section-title">Datos de entrada</div>
+<div class="section-sub">Montos y USDT manuales. El BCV se actualiza automáticamente.</div>
+
+<label>Monto en bolívares</label>
+<input id="bsInput" type="number" inputmode="decimal" step="any" placeholder="0,00">
+
+<label>Monto en dólares</label>
+<input id="usdInput" type="number" inputmode="decimal" step="any" placeholder="0,00">
+
+<label>Valor del USDT</label>
+<input id="usdt" type="number" inputmode="decimal" step="any" placeholder="0,00">
+
+<label>Valor del dólar BCV</label>
+<div class="bcv-row">
+<div class="bcv-field"><input id="bcv" type="number" inputmode="decimal" step="any" placeholder="Cargando BCV..." readonly></div>
+<button class="bcv-update" id="refreshBcv">↻</button>
+</div>
+<div class="status" id="bcvStatus">ACTUALIZANDO BCV...</div>
+
+<label>Valor del BCV intervención</label>
+<input id="intervention" type="number" placeholder="0,00" readonly>
+
+<div class="actions"><button class="secondary" id="clear">Limpiar</button><button class="primary" id="focusFirst">Nuevo cálculo</button></div>
+</section>
+
+<section class="card results">
+<div class="section-title" style="margin-top:7px">Resultados</div>
+<div class="result"><span class="name">Valor en bolívares</span><span class="value" id="resultBs">—</span></div>
+<div class="result"><span class="name">Valor en dólares</span><span class="value" id="resultUsd">—</span></div>
+<div class="result"><span class="name">Monto intervención</span><span class="value" id="resultIntervention">—</span></div>
+<div class="result"><span class="name">Diferencia USDT vs intervención</span><span class="value" id="resultDiff">—</span></div>
+</section>
+<div class="footer">BCV AUTOMÁTICO • INTERVENCIÓN = BCV + 0,5%</div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const API1="https://rates.dolarvzla.com/bcv/current.json";
+const API2="https://bcv.today/api/v1/rate.json";
+const ids=["bsInput","usdInput","usdt","bcv"];
+
+function n(id){return parseFloat($(id).value)}
+function f(x,s=" Bs"){return Number.isFinite(x)?x.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2})+s:"—"}
+
+function calc(){
+ const bs=n("bsInput"),usd=n("usdInput"),u=n("usdt"),b=n("bcv"),i=b*1.005;
+ $("intervention").value=Number.isFinite(i)?i.toFixed(6):"";
+ $("resultBs").textContent=f(usd*b);
+ $("resultUsd").textContent=f(bs/b," $");
+ $("resultIntervention").textContent=f(usd*i);
+ const d=(u/i-1)*100;
+ $("resultDiff").textContent=Number.isFinite(d)?d.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2})+" %":"—";
+}
+
+async function getJSON(url){
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),7000);
+ try{
+   const r=await fetch(url+"?t="+Date.now(),{cache:"no-store",signal:c.signal});
+   if(!r.ok)throw new Error("HTTP");
+   return await r.json();
+ }finally{clearTimeout(t)}
+}
+
+async function loadBCV(){
+ const s=$("bcvStatus");
+ s.textContent="ACTUALIZANDO BCV...";
+ try{
+   const d=await getJSON(API1);
+   const rate=Number(d?.current?.usd);
+   const date=d?.current?.date||"";
+   if(!Number.isFinite(rate)||rate<=0)throw new Error("rate");
+   $("bcv").value=rate;
+   $("bcv").readOnly=true;
+   s.textContent=date?"BCV ACTUALIZADO • "+date.split("-").reverse().join("/"):"BCV ACTUALIZADO AUTOMÁTICAMENTE";
+   calc();
+   return;
+ }catch(e){}
+ try{
+   const d=await getJSON(API2);
+   const rate=Number(d?.USD);
+   const date=d?.effective_date||d?.date||"";
+   if(!Number.isFinite(rate)||rate<=0)throw new Error("rate");
+   $("bcv").value=rate;
+   $("bcv").readOnly=true;
+   s.textContent=date?"BCV ACTUALIZADO • "+date.split("-").reverse().join("/"):"BCV ACTUALIZADO AUTOMÁTICAMENTE";
+   calc();
+   return;
+ }catch(e){}
+ $("bcv").readOnly=false;
+ s.textContent="BCV AUTOMÁTICO NO DISPONIBLE • INTRODÚCELO MANUALMENTE";
+ calc();
+}
+
+ids.forEach(id=>$(id).addEventListener("input",calc));
+$("refreshBcv").onclick=loadBCV;
+$("clear").onclick=()=>{ids.forEach(id=>$(id).value="");$("intervention").value="";loadBCV();$("bsInput").focus()};
+$("focusFirst").onclick=()=>{$("bsInput").focus();loadBCV()};
+window.addEventListener("load",()=>{calc();loadBCV()});
+</script>
+</body>
+</html>
