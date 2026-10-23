@@ -64,8 +64,8 @@ function calc(){
  const diff=adjusted-i;
  const pct=(adjusted>0&&Number.isFinite(diff))?(diff/adjusted)*100:NaN;
  $("resultDiff").textContent=Number.isFinite(pct)?pct.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2})+" %":"—";
- // Monto real = USDT - (USDT × porcentaje de diferencia expresado como decimal).
- const real=u*(1-(pct/100));
+ // Monto real en bolívares = monto en dólares × 93,4% × promedio USDT P2P.
+ const real=usd*0.934*u;
  $("resultRealUsdt").textContent=Number.isFinite(real)?f(real):"—";
 }
 async function getJSON(url){
