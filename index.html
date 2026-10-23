@@ -25,10 +25,10 @@ label{display:block;font-size:13px;font-weight:700;color:#344054;margin:14px 0 7
 <main class="app">
 <header class="top"><div class="brand"><div class="logo">USDT</div><div><h1>Calculadora USDT • BCV</h1><div class="tag">Conversión y referencia de intervención</div></div></div></header>
 <section class="card">
-<div class="section-title">Datos de entrada</div><div class="section-sub">Montos y USDT manuales. El BCV se actualiza automáticamente.</div>
+<div class="section-title">Datos de entrada</div><div class="section-sub">Montos manuales; BCV y promedio USDT P2P automáticos.</div>
 <label>Monto en bolívares</label><input id="bsInput" type="number" inputmode="decimal" step="any" placeholder="0,00">
 <label>Monto en dólares</label><input id="usdInput" type="number" inputmode="decimal" step="any" placeholder="0,00">
-<label>Valor del USDT</label><input id="usdt" type="number" inputmode="decimal" step="any" placeholder="0,00">
+<label>Valor promedio del USDT P2P (Bs)</label><input id="usdt" type="number" inputmode="decimal" step="any" placeholder="Cargando USDT..." readonly><div class="status" id="usdtStatus">ACTUALIZANDO PROMEDIO P2P...</div>
 <label>Valor del dólar BCV</label><div class="bcv-row"><div class="bcv-field"><input id="bcv" type="number" inputmode="decimal" step="any" placeholder="Cargando BCV..." readonly></div><button class="bcv-update" id="refreshBcv">↻</button></div>
 <div class="status" id="bcvStatus">ACTUALIZANDO BCV...</div>
 <label>Valor del BCV intervención</label><input id="intervention" type="number" placeholder="0,00" readonly>
@@ -42,12 +42,13 @@ label{display:block;font-size:13px;font-weight:700;color:#344054;margin:14px 0 7
 <div class="result"><span class="name">Diferencia USDT vs intervención</span><span class="value" id="resultDiff">—</span></div>
 <div class="result"><span class="name">Monto real del USDT (Bs)</span><span class="value" id="resultRealUsdt">—</span></div>
 </section>
-<div class="footer">BCV AUTOMÁTICO • INTERVENCIÓN = BCV + 0,5%</div>
+<div class="footer">BCV AUTOMÁTICO • USDT = PROMEDIO COMPRA/VENTA P2P • INTERVENCIÓN = BCV + 0,5%<br><a href="https://www.usdt.com.ve" target="_blank" rel="noopener" style="color:inherit">Datos P2P: usdt.com.ve</a></div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
 const API1="https://rates.dolarvzla.com/bcv/current.json";
 const API2="https://bcv.today/api/v1/rate.json";
+const USDT_API="https://www.usdt.com.ve/api/v1/rates/current";
 const ids=["bsInput","usdInput","usdt","bcv"];
 function n(id){return parseFloat($(id).value)}
 function f(x,s=" Bs"){return Number.isFinite(x)?x.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2})+s:"—"}
@@ -68,9 +69,38 @@ function calc(){
  $("resultRealUsdt").textContent=Number.isFinite(real)?f(real):"—";
 }
 async function getJSON(url){
- const c=new AbortController(),t=setTimeout(()=>c.abort(),7000);
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),6000);
  try{const r=await fetch(url+"?t="+Date.now(),{cache:"no-store",signal:c.signal});if(!r.ok)throw new Error("HTTP");return await r.json()}
  finally{clearTimeout(t)}
+}
+function findBinanceRates(obj, depth=0){
+ if(!obj||typeof obj!=="object"||depth>8)return null;
+ // Formato documentado de usdt.com.ve: {success:true,data:{binance:{buy_rate,sell_rate}}}
+ const b=obj.data?.binance||obj.binance;
+ if(b){
+  const buy=Number(b.buy_rate??b.buyRate??b.buy??b.purchase??b.compra);
+  const sell=Number(b.sell_rate??b.sellRate??b.sell??b.sale??b.venta);
+  if(buy>0&&sell>0)return {buy,sell};
+ }
+ if(Array.isArray(obj)){for(const item of obj){const hit=findBinanceRates(item,depth+1);if(hit)return hit;}}
+ else {for(const k of Object.keys(obj)){const hit=findBinanceRates(obj[k],depth+1);if(hit)return hit;}}
+ return null;
+}
+async function loadUSDT(){
+ const status=$("usdtStatus");status.textContent="CONSULTANDO COTIZACIONES P2P (MÁX. 6 S)...";
+ try{
+  const d=await getJSON(USDT_API);const rates=findBinanceRates(d);
+  if(!rates)throw new Error("La fuente no devolvió compra y venta de Binance");
+  const avg=(rates.buy+rates.sell)/2;
+  if(!Number.isFinite(avg)||avg<=0)throw new Error("Promedio inválido");
+  $("usdt").value=avg.toFixed(6);$("usdt").readOnly=true;
+  status.textContent="PROMEDIO P2P • COMPRA: "+f(rates.buy)+" • VENTA: "+f(rates.sell)+" • PROMEDIO: "+f(avg);
+  calc();
+ }catch(e){
+  $("usdt").readOnly=false;
+  status.textContent="NO SE PUDO ACTUALIZAR AUTOMÁTICAMENTE. RECARGA DESDE GITHUB PAGES O INTRODUCE EL PROMEDIO MANUALMENTE.";
+  $("usdt").placeholder="Ingresa el promedio manualmente";calc();
+ }
 }
 async function loadBCV(){
  const s=$("bcvStatus");s.textContent="ACTUALIZANDO BCV...";
@@ -91,10 +121,11 @@ async function loadBCV(){
  $("bcv").readOnly=false;s.textContent="BCV AUTOMÁTICO NO DISPONIBLE • INTRODÚCELO MANUALMENTE";calc();
 }
 ids.forEach(id=>$(id).addEventListener("input",calc));
+$("usdt").addEventListener("input",calc);
 $("refreshBcv").onclick=loadBCV;
-$("clear").onclick=()=>{ids.forEach(id=>$(id).value="");$("intervention").value="";loadBCV();$("bsInput").focus()};
-$("focusFirst").onclick=()=>{$("bsInput").focus();loadBCV()};
-window.addEventListener("load",()=>{calc();loadBCV()});
+$("clear").onclick=()=>{ids.filter(id=>id!=="bcv").forEach(id=>$(id).value="");$("intervention").value="";loadBCV();loadUSDT();$("bsInput").focus()};
+$("focusFirst").onclick=()=>{$("bsInput").focus();loadBCV();loadUSDT()};
+window.addEventListener("load",()=>{calc();loadBCV();loadUSDT();setInterval(loadUSDT,300000)});
 </script>
 </body>
 </html>
